@@ -20,6 +20,12 @@ const cancelTaskBtn = document.getElementById('cancelTaskBtn');
 const debugInfo = document.getElementById('debugInfo');
 const searchModeToggle = document.getElementById('searchModeToggle');
 
+// Login related DOM elements
+const loginScreen = document.getElementById('loginScreen');
+const passwordInput = document.getElementById('passwordInput');
+const loginBtn = document.getElementById('loginBtn');
+const loginError = document.getElementById('loginError');
+
 // State
 let currentFilter = 'all';
 let todos = [];
@@ -32,30 +38,218 @@ let editingTodoId = null;
 // Add a new variable for search mode
 let searchBySubsequence = false;
 
-// Load todos when page loads
-document.addEventListener('DOMContentLoaded', () => {
+// Add to existing state variables
+let isAuthenticated = false;
+
+// Update the checkAuthentication function with debug
+const checkAuthentication = () => {
+    const authStatus = sessionStorage.getItem('authenticated');
+    console.log("Authentication check - Session status:", authStatus);
+    return authStatus === 'true';
+};
+
+// Initialize password in Firebase if it doesn't exist
+async function initializePassword() {
+    try {
+        // Check if the password document exists
+        const passwordQuerySnapshot = await getDocs(query(collection(db, 'settings'), 
+            where('name', '==', 'password')));
+        
+        // If it doesn't exist, create it with the default password
+        if (passwordQuerySnapshot.empty) {
+            await addDoc(collection(db, 'settings'), {
+                name: 'password',
+                value: 'bib'
+            });
+            console.log("Default password initialized in Firebase");
+        } else {
+            console.log("Password already exists in Firebase");
+        }
+    } catch (error) {
+        console.error("Error initializing password:", error);
+        // Create a fallback password document with a different approach if there was an error
+        try {
+            const settingsRef = collection(db, 'settings');
+            await addDoc(settingsRef, {
+                name: 'password',
+                value: 'bib'
+            });
+            console.log("Created password using fallback method");
+        } catch (innerError) {
+            console.error("Fallback password creation also failed:", innerError);
+        }
+    }
+}
+
+// Verify the password against Firebase
+async function verifyPassword(password) {
+    try {
+        const passwordQuerySnapshot = await getDocs(query(collection(db, 'settings'), 
+            where('name', '==', 'password')));
+        
+        if (!passwordQuerySnapshot.empty) {
+            const passwordDoc = passwordQuerySnapshot.docs[0].data();
+            return passwordDoc.value === password;
+        }
+        return false;
+    } catch (error) {
+        console.error("Error verifying password:", error);
+        return false;
+    }
+}
+
+// Add direct show/hide functions that don't rely on transitions
+function directlyShowMainContent() {
+    // Force show main content without transitions in case transitions fail
+    const mainContent = document.getElementById('mainContent');
+    if (mainContent) {
+        mainContent.style.opacity = '1';
+        mainContent.classList.remove('opacity-0');
+        mainContent.classList.add('opacity-100');
+        
+        // Also show the main element
+        const mainElement = document.querySelector('main');
+        if (mainElement) {
+            mainElement.style.opacity = '1';
+        }
+    }
+}
+
+// Update handleLogin function
+async function handleLogin() {
+    const password = passwordInput.value.trim();
+    console.log("Attempting login with password:", password);
+    
+    if (!password) {
+        alert("Please enter a password");
+        return;
+    }
+    
+    // Check hardcoded password
+    if (password === 'bib') {
+        console.log("Login successful with hardcoded password");
+        sessionStorage.setItem('authenticated', 'true');
+        hideLoginScreen();
+        
+        // Force show content after a delay
+        setTimeout(directlyShowMainContent, 500);
+        return;
+    }
+    
+    // Show error for wrong password
+    console.log("Wrong password entered");
+    loginError.classList.remove('hidden');
+    passwordInput.value = '';
+}
+
+// Update hideLoginScreen function to properly show main content
+function hideLoginScreen() {
+    isAuthenticated = true;
+    console.log("Hiding login screen, showing main content");
+    
+    // Fade out login screen
+    loginScreen.classList.add('opacity-0');
+    setTimeout(() => {
+        loginScreen.classList.add('hidden');
+        
+        // Show main content AFTER login screen is hidden
+        const mainContent = document.getElementById('mainContent');
+        if (mainContent) {
+            mainContent.classList.remove('opacity-0');
+            mainContent.classList.add('opacity-100');
+            console.log("Main content should now be visible");
+            
+            // Also make sure the main element inside is visible
+            const mainElement = mainContent.querySelector('main');
+            if (mainElement) {
+                mainElement.classList.remove('opacity-0');
+                mainElement.classList.add('opacity-100');
+                console.log("Main element visibility updated");
+            }
+        } else {
+            console.error("Main content element not found!");
+        }
+        
+        // Load todos after authentication
+        if (window.db) {
+            loadTodos();
+            console.log("Loading todos after authentication...");
+        }
+    }, 300);
+}
+
+// Update showLoginScreen function to ensure login is visible
+function showLoginScreen() {
+    console.log("Showing login screen");
+    isAuthenticated = false;
+    
+    // Hide main content
+    const mainContent = document.getElementById('mainContent');
+    mainContent.classList.remove('opacity-100');
+    mainContent.classList.add('opacity-0');
+    
+    // Ensure login screen is visible
+    loginScreen.classList.remove('hidden');
+    loginScreen.classList.remove('opacity-0');
+    
+    // Clear password field
+    if (passwordInput) {
+        passwordInput.value = '';
+    }
+    
+    // Set focus to password field
+    setTimeout(() => {
+        if (passwordInput) {
+            passwordInput.focus();
+        }
+    }, 100);
+}
+
+// Create a function to manage the initial app state
+function initializeApp() {
+    console.log("Initializing app...");
+    
+    // Clear existing authentication on page load to force login
+    sessionStorage.removeItem('authenticated');
+    
     // Apply dark mode if previously set
     if (darkMode) {
         document.documentElement.classList.add('dark');
         if (darkModeToggle) darkModeToggle.textContent = '☀️';
-        console.log("Dark mode enabled on load");
     } else {
         document.documentElement.classList.remove('dark');
         if (darkModeToggle) darkModeToggle.textContent = '🌙';
-        console.log("Dark mode disabled on load");
     }
     
-    // Wait a short time to ensure Firebase initialization is complete
+    // Make sure login screen is visible and ready
+    const loginScreenElement = document.getElementById('loginScreen');
+    if (loginScreenElement) {
+        loginScreenElement.classList.remove('hidden');
+        loginScreenElement.classList.remove('opacity-0');
+    } else {
+        console.error("Login screen element not found!");
+    }
+    
+    // Hide main content initially
+    const mainContent = document.getElementById('mainContent');
+    if (mainContent) {
+        mainContent.classList.add('opacity-0');
+    }
+    
+    // Setup login event listeners AFTER ensuring the DOM is ready
     setTimeout(() => {
-        if (window.db) {
-            loadTodos();
-            console.log("Loading todos...");
-            debugInfo.textContent = "Loading todos from Firebase...";
-        } else {
-            console.error("Firebase DB not available");
-            debugInfo.textContent = "Error: Firebase DB not available";
-        }
-    }, 1000);
+        setupLoginListeners();
+        console.log("Login listeners set up");
+    }, 100);
+}
+
+// Update the event listener registration to avoid duplicates
+document.addEventListener('DOMContentLoaded', () => {
+    // Initialize app once
+    initializeApp();
+    
+    // Setup app event listeners (not login listeners - those are in initializeApp)
+    setupEventListeners();
 });
 
 // Setup event listeners
@@ -142,10 +336,13 @@ function setupEventListeners() {
         searchBySubsequence = searchModeToggle.checked;
         filterTodos(); // Re-filter todos with the new search mode
     });
+    
+    // Add logout functionality
+    const logoutBtn = document.getElementById('logoutBtn');
+    if (logoutBtn) {
+        logoutBtn.addEventListener('click', logout);
+    }
 }
-
-// Call setup once DOM is loaded
-document.addEventListener('DOMContentLoaded', setupEventListeners);
 
 // Open task modal for creating a new task
 function openAddTaskModal() {
@@ -527,3 +724,69 @@ async function deleteTodo(id) {
         }
     }
 }
+
+// Add this function to show the main content
+function showMainContent() {
+    document.querySelector('main').classList.remove('opacity-0');
+    document.querySelector('main').classList.add('opacity-100');
+}
+
+// Add a logout function
+function logout() {
+    sessionStorage.removeItem('authenticated');
+    showLoginScreen();
+}
+
+// Setup login event listeners
+function setupLoginListeners() {
+    // Add a direct click event for the login button
+    if (loginBtn) {
+        loginBtn.addEventListener('click', () => {
+            console.log("Login button clicked");
+            handleLogin();
+        });
+    } else {
+        console.error("Login button not found");
+    }
+    
+    // Also keep the Enter key functionality
+    if (passwordInput) {
+        passwordInput.addEventListener('keypress', (e) => {
+            if (e.key === 'Enter') {
+                console.log("Enter key pressed in password field");
+                handleLogin();
+            }
+        });
+        
+        // Clear error message when user starts typing again
+        passwordInput.addEventListener('input', () => {
+            loginError.classList.add('hidden');
+        });
+        
+        // Focus the password input when the page loads
+        passwordInput.focus();
+    } else {
+        console.error("Password input not found");
+    }
+}
+
+// Add a debug function we can call from the console
+window.debugApp = function() {
+    console.log("Debug info:");
+    console.log("Is authenticated:", isAuthenticated);
+    console.log("Login screen hidden:", loginScreen.classList.contains('hidden'));
+    console.log("Main content opacity:", document.getElementById('mainContent').style.opacity);
+    console.log("Session storage:", sessionStorage.getItem('authenticated'));
+    
+    // Force fix if needed
+    directlyShowMainContent();
+    console.log("Forced main content display");
+}
+
+// Call after initial load to ensure everything is visible
+setTimeout(function() {
+    if (isAuthenticated) {
+        console.log("Running visibility check");
+        directlyShowMainContent();
+    }
+}, 2000);

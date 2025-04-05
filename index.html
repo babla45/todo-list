@@ -45,7 +45,7 @@
       // Import the functions you need from the SDKs you need
       import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.0/firebase-app.js";
       import { getAnalytics } from "https://www.gstatic.com/firebasejs/11.6.0/firebase-analytics.js";
-      import { getFirestore, collection, addDoc, getDocs, doc, updateDoc, deleteDoc, onSnapshot, orderBy, query, serverTimestamp } from "https://www.gstatic.com/firebasejs/11.6.0/firebase-firestore.js";
+      import { getFirestore, collection, addDoc, getDocs, doc, updateDoc, deleteDoc, onSnapshot, orderBy, query, serverTimestamp, where } from "https://www.gstatic.com/firebasejs/11.6.0/firebase-firestore.js";
       import { getAuth, createUserWithEmailAndPassword, signInWithEmailAndPassword, signOut, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.6.0/firebase-auth.js";
     
       // Your web app's Firebase configuration
@@ -82,10 +82,26 @@
       window.signInWithEmailAndPassword = signInWithEmailAndPassword;
       window.signOut = signOut;
       window.onAuthStateChanged = onAuthStateChanged;
+      window.where = where;
     </script>
 </head>
 <body class="bg-gray-100 dark:bg-gray-900 min-h-screen font-sans">
-    <div class="flex flex-col min-h-screen">
+    <div id="loginScreen" class="fixed inset-0 bg-opacity-80 bg-gray-900 backdrop-blur-sm flex items-center justify-center z-50 transition-opacity duration-300">
+        <div class="bg-white dark:bg-gray-800 p-6 rounded-lg w-full max-w-sm shadow-lg m-4">
+            <h2 class="text-xl font-bold text-gray-800 dark:text-white mb-4">TaskMaster Login</h2>
+            <div class="space-y-4">
+                <div>
+                    <label class="block text-sm font-medium mb-1 text-gray-700 dark:text-gray-300">Password</label>
+                    <input type="password" id="passwordInput" class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white rounded-lg focus:outline-none focus:ring-1 focus:ring-primary-base">
+                </div>
+                <div id="loginError" class="text-red-500 text-sm hidden">Incorrect password. Please try again.</div>
+                <button id="loginBtn" class="w-full bg-primary-base hover:bg-primary-hover text-white py-2 rounded-lg font-medium">
+                    Login
+                </button>
+            </div>
+        </div>
+    </div>
+    <div id="mainContent" class="flex flex-col min-h-screen opacity-0 transition-opacity duration-300">
         <!-- Header - simplified to match screenshot -->
         <header class="bg-primary-base text-white">
             <div class="container mx-auto px-4 py-5 max-w-2xl flex justify-between items-center">
@@ -95,9 +111,16 @@
                     </svg>
                     <h1 class="text-xl font-bold">TaskMaster</h1>
                 </div>
-                <button id="darkModeToggle" class="text-yellow-300 p-1.5 rounded-full">
-                    🌙
-                </button>
+                <div class="flex items-center gap-2">
+                    <button id="logoutBtn" class="text-white hover:text-yellow-200 p-1.5 rounded-full">
+                        <svg class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
+                        </svg>
+                    </button>
+                    <button id="darkModeToggle" class="text-yellow-300 p-1.5 rounded-full">
+                        🌙
+                    </button>
+                </div>
             </div>
         </header>
 
