@@ -18,6 +18,7 @@ const dueDateInput = document.getElementById('dueDateInput');
 const saveTaskBtn = document.getElementById('saveTaskBtn');
 const cancelTaskBtn = document.getElementById('cancelTaskBtn');
 const debugInfo = document.getElementById('debugInfo');
+const searchModeToggle = document.getElementById('searchModeToggle');
 
 // State
 let currentFilter = 'all';
@@ -27,6 +28,9 @@ let darkMode = localStorage.getItem('darkMode') === 'true';
 // Global variables to track edit state
 let isEditing = false;
 let editingTodoId = null;
+
+// Add a new variable for search mode
+let searchBySubsequence = false;
 
 // Load todos when page loads
 document.addEventListener('DOMContentLoaded', () => {
@@ -133,6 +137,11 @@ function setupEventListeners() {
     clearCompletedBtn.addEventListener('click', clearCompletedTasks);
     
     darkModeToggle.addEventListener('click', toggleDarkMode);
+    
+    searchModeToggle.addEventListener('change', () => {
+        searchBySubsequence = searchModeToggle.checked;
+        filterTodos(); // Re-filter todos with the new search mode
+    });
 }
 
 // Call setup once DOM is loaded
@@ -255,11 +264,11 @@ function loadTodos() {
                 if (todoList.children.length === 0) {
                     console.log("todoList is still empty after processing");
                     // Try direct rendering as fallback
-                    snapshot.docs.forEach(doc => {
+                    snapshot.docs.forEach((doc, index) => {
                         renderTodo({
                             id: doc.id,
                             data: () => doc.data()
-                        });
+                        }, index);
                     });
                 }
             }, 500);
@@ -273,7 +282,24 @@ function loadTodos() {
     }
 }
 
-// Filter todos based on search input and current filter
+// Add this function to check if a string contains a subsequence
+function isSubsequence(str, subseq) {
+    if (subseq.length === 0) return true;
+    
+    let strIndex = 0;
+    let subseqIndex = 0;
+    
+    while (strIndex < str.length && subseqIndex < subseq.length) {
+        if (str[strIndex].toLowerCase() === subseq[subseqIndex].toLowerCase()) {
+            subseqIndex++;
+        }
+        strIndex++;
+    }
+    
+    return subseqIndex === subseq.length;
+}
+
+// Update the filterTodos function
 function filterTodos() {
     // Clear the list first
     todoList.innerHTML = '';
@@ -282,7 +308,13 @@ function filterTodos() {
     
     // Filter todos based on current filter and search term
     const filteredTodos = todos.filter(todo => {
-        const matchesSearch = todo.text.toLowerCase().includes(searchTerm);
+        // Different search methods
+        let matchesSearch;
+        if (searchBySubsequence) {
+            matchesSearch = isSubsequence(todo.text.toLowerCase(), searchTerm);
+        } else {
+            matchesSearch = todo.text.toLowerCase().includes(searchTerm);
+        }
         
         if (currentFilter === 'all') {
             return matchesSearch;
@@ -293,13 +325,13 @@ function filterTodos() {
         }
     });
     
-    // Render the filtered todos
-    filteredTodos.forEach(todo => {
+    // Render the filtered todos with index
+    filteredTodos.forEach((todo, index) => {
         // Create a wrapper object that mimics a DocumentSnapshot
         renderTodo({
             id: todo.id,
             data: () => todo
-        });
+        }, index);
     });
     
     // Update statistics
@@ -331,7 +363,7 @@ async function clearCompletedTasks() {
 }
 
 // Render a todo item in the UI
-function renderTodo(docSnapshot) {
+function renderTodo(docSnapshot, index) {
     try {
         const todoData = docSnapshot.data();
         const todoId = docSnapshot.id;
@@ -347,9 +379,14 @@ function renderTodo(docSnapshot) {
         const mainContainer = document.createElement('div');
         mainContainer.className = 'flex items-center justify-between';
         
-        // Create the left part with checkbox and text
+        // Create the left part with index, checkbox and text
         const leftDiv = document.createElement('div');
         leftDiv.className = 'flex items-center gap-3';
+        
+        // Add index number
+        const indexSpan = document.createElement('span');
+        indexSpan.textContent = `${index + 1}.`;
+        indexSpan.className = 'text-gray-500 dark:text-gray-400 font-medium min-w-[20px]';
         
         // Create simple checkbox to match the screenshot
         const checkbox = document.createElement('input');
@@ -366,6 +403,7 @@ function renderTodo(docSnapshot) {
         
         textDiv.appendChild(span);
         
+        leftDiv.appendChild(indexSpan);
         leftDiv.appendChild(checkbox);
         leftDiv.appendChild(textDiv);
         
